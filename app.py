@@ -48,7 +48,7 @@ def process_pdf(file, campos, ocr_layout):
     pdf_bytes = file.read()
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     page = doc.load_page(0)
-    pix = page.get_pixmap(dpi=200, alpha=False)
+    pix = page.get_pixmap(dpi=300, alpha=False)
     image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
     for campo in campos:
@@ -59,7 +59,7 @@ def process_pdf(file, campos, ocr_layout):
         for ocr in ocr_layout:
             x, y, w, h = ocr["coords"]
             crop = image.crop((x, y, x + w, y + h))
-            ocr_text = pytesseract.image_to_string(crop, lang="eng")
+            ocr_text = pytesseract.image_to_string(crop, lang="por")
             result[ocr["title"]] = ocr_text.strip()
 
     file.seek(0)
@@ -79,10 +79,11 @@ if layout_file:
     st.success("Layout carregado com sucesso!")
 
 if uploaded_file:
+    # 1ª renderização visual
     pdf_bytes = uploaded_file.read()
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     page = doc.load_page(0)
-    pix = page.get_pixmap(dpi=200, alpha=False)
+    pix = page.get_pixmap(dpi=300, alpha=False)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     st.image(img, caption="📄 Visualização da Página")
     uploaded_file.seek(0)
@@ -119,12 +120,20 @@ if uploaded_file:
                 coords = (int(obj["left"]), int(obj["top"]), int(obj["width"]), int(obj["height"]))
                 title = st.text_input(f"Título OCR {idx+1}", value=f"OCR_{idx+1}", key=f"ocr_title_{idx}")
                 crop = img.crop((coords[0], coords[1], coords[0]+coords[2], coords[1]+coords[3]))
-                ocr_text = pytesseract.image_to_string(crop, lang="eng").strip()
                 st.image(crop, caption=f"📍 {title}")
+                ocr_text = pytesseract.image_to_string(crop, lang="por").strip()
                 st.info(f"Texto OCR: {ocr_text or 'Nada reconhecido'}")
                 preview_layout.append({"title": title, "coords": coords})
         ocr_layout = preview_layout
         st.download_button("⬇️ Baixar layout", data=json.dumps(ocr_layout).encode(), file_name="layout_ocr.json")
+
+    # ⚠️ Regera a imagem para uso posterior (evita img ficar vazio)
+    uploaded_file.seek(0)
+    pdf_bytes = uploaded_file.read()
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page = doc.load_page(0)
+    pix = page.get_pixmap(dpi=300, alpha=False)
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
     if ocr_layout and (not canvas.json_data or not canvas.json_data.get("objects")):
         st.subheader("📌 Pré-visualização OCR do layout importado")
@@ -132,11 +141,10 @@ if uploaded_file:
             x, y, w, h = ocr["coords"]
             title = ocr["title"]
             crop = img.crop((x, y, x + w, y + h))
-            ocr_text = pytesseract.image_to_string(crop, lang="eng").strip()
             st.image(crop, caption=f"📍 {title}")
+            ocr_text = pytesseract.image_to_string(crop, lang="por").strip()
             st.info(f"Texto OCR: {ocr_text or 'Nada reconhecido'}")
 
-    uploaded_file.seek(0)
     texto = extract_text(uploaded_file)
     st.text_area("📜 Texto extraído", texto, height=250)
 
