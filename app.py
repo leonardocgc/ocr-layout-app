@@ -6,7 +6,6 @@ import json
 import tempfile
 import fitz  # PyMuPDF
 from PIL import Image
-from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 import pytesseract
 
@@ -46,17 +45,24 @@ def extract_from_text(text, keyword, direction, only_numeric, skip_count, char_l
 def process_pdf(file, campos, ocr_layout):
     text = extract_text(file)
     result = {"Arquivo": file.name}
+    pdf_bytes = file.read()
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page = doc.load_page(0)
+    pix = page.get_pixmap(dpi=200, alpha=False)
+    image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
     for campo in campos:
         keyword, direction, only_numeric, skip_count, char_limit = campo
         result[keyword] = extract_from_text(text, keyword, direction, only_numeric, skip_count, char_limit)
+
     if ocr_layout:
-        file.seek(0)
-        image = convert_from_bytes(file.read())[0]
         for ocr in ocr_layout:
             x, y, w, h = ocr["coords"]
             crop = image.crop((x, y, x + w, y + h))
             ocr_text = pytesseract.image_to_string(crop, lang="eng")
             result[ocr["title"]] = ocr_text.strip()
+
+    file.seek(0)
     return result
 
 st.set_page_config(layout="wide")
@@ -75,23 +81,24 @@ if layout_file:
 if uploaded_file:
     pdf_bytes = uploaded_file.read()
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    page = doc.load_page(0)  # primeira página
-    pix = page.get_pixmap(dpi=150)
+    page = doc.load_page(0)
+    pix = page.get_pixmap(dpi=200, alpha=False)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    st.image(img, caption="📄 Visualização da Página")
     uploaded_file.seek(0)
 
     if ocr_layout:
-        drawn_shapes = [ {
+        drawn_shapes = [{
             "type": "rect",
             "left": int(o["coords"][0]),
             "top": int(o["coords"][1]),
             "width": int(o["coords"][2]),
             "height": int(o["coords"][3]),
-            "fill": "rgba(255, 165, 0, 0.3)",  # laranja claro transparente
+            "fill": "rgba(255, 165, 0, 0.3)",
             "stroke": "orange",
             "strokeWidth": 2,
             "strokeUniform": True
-        } for o in ocr_layout ]
+        } for o in ocr_layout]
 
     canvas = st_canvas(
         background_image=img,
@@ -119,7 +126,6 @@ if uploaded_file:
         ocr_layout = preview_layout
         st.download_button("⬇️ Baixar layout", data=json.dumps(ocr_layout).encode(), file_name="layout_ocr.json")
 
-    # ✅ ADICIONADO: pré-visualização do layout importado mesmo se não desenhar nada manualmente
     if ocr_layout and (not canvas.json_data or not canvas.json_data.get("objects")):
         st.subheader("📌 Pré-visualização OCR do layout importado")
         for idx, ocr in enumerate(ocr_layout):
