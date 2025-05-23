@@ -4,7 +4,8 @@ import pandas as pd
 import re
 import json
 import tempfile
-from pdf2image import convert_from_bytes
+import fitz  # PyMuPDF
+from PIL import Image
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 import pytesseract
@@ -72,7 +73,11 @@ if layout_file:
     st.success("Layout carregado com sucesso!")
 
 if uploaded_file:
-    img = convert_from_bytes(uploaded_file.read(), first_page=1, last_page=1)[0]
+    pdf_bytes = uploaded_file.read()
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page = doc.load_page(0)  # primeira página
+    pix = page.get_pixmap(dpi=150)
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     uploaded_file.seek(0)
 
     if ocr_layout:
